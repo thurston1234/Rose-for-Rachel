@@ -1,0 +1,512 @@
+
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crystal Rose Fantasy</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #080509;
+    }
+    canvas { display: block; }
+    #hint {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #ffc9db;
+      font: 12px Arial, sans-serif;
+      opacity: 0.65;
+      pointer-events: none;
+      text-align: center;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+<div id="hint">Drag to rotate · Scroll to zoom</div>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080509);
+scene.fog = new THREE.FogExp2(0x080509, 0.016);
+
+const camera = new THREE.PerspectiveCamera(
+  40, innerWidth / innerHeight, 0.1, 100
+);
+camera.position.set(0, 2.2, 13.5);
+camera.lookAt(0, 0.4, 0);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: "high-performance"
+});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.8;
+document.body.appendChild(renderer.domElement);
+
+// Bloom / Glow
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(innerWidth, innerHeight),
+  0.45, 0.3, 0.8
+);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// Camera control
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.035;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.35;
+controls.target.set(0, 0.45, 0);
+controls.minDistance = 6;
+controls.maxDistance = 22;
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffb6dc, 0.65));
+
+const lights = [
+  [0xff719e, [-4, 5, 5], 100],
+  [0xffe5ed, [4, 6, 3], 85],
+  [0xed4cbb, [0, 2, -5], 115],
+  [0xffffff, [1, -2, 5], 30]
+];
+
+lights.forEach(([color, position, power]) => {
+  const light = new THREE.PointLight(color, power, 24);
+  light.position.set(...position);
+  scene.add(light);
+});
+
+// Materials
+const crystal = new THREE.MeshPhysicalMaterial({
+  color: 0xff8bad,
+  metalness: 0.12,
+  roughness: 0.16,
+  transparent: true,
+  opacity: 0.82,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+  clearcoat: 1,
+  clearcoatRoughness: 0.07,
+  emissive: 0x4e102c,
+  emissiveIntensity: 0.25
+});
+
+const brightCrystal = crystal.clone();
+brightCrystal.color.set(0xffd2e0);
+brightCrystal.emissive.set(0x8b244b);
+brightCrystal.emissiveIntensity = 0.42;
+
+const darkPink = crystal.clone();
+darkPink.color.set(0xe64079);
+darkPink.emissive.set(0x7b103f);
+darkPink.emissiveIntensity = 0.4;
+
+const stemMaterial = new THREE.MeshPhysicalMaterial({
+  color: 0xe6a6b8,
+  metalness: 0.38,
+  roughness: 0.2,
+  transparent: true,
+  opacity: 0.88,
+  clearcoat: 1
+});
+
+const glowMaterial = new THREE.MeshBasicMaterial({
+  color: 0xffc6db,
+  toneMapped: false
+});
+
+// Crystal petal geometry
+function petalGeometry() {
+  const vertices = [];
+  const indices = [];
+  const segmentsX = 12;
+  const segmentsY = 18;
+
+  for (let j = 0; j <= segmentsY; j++) {
+    const v = j / segmentsY;
+    const width = 0.53 * Math.pow(Math.sin(Math.PI * v), 0.7);
+
+    for (let i = 0; i <= segmentsX; i++) {
+      const u = i / segmentsX * 2 - 1;
+      const x = u * width;
+      const y = v * 1.08;
+      const z =
+        0.18 * Math.sin(Math.PI * v) * (1 - u * u) +
+        0.42 * v * v +
+        0.07 * u * u;
+
+      vertices.push(x, y, z);
+    }
+  }
+
+  for (let j = 0; j < segmentsY; j++) {
+    for (let i = 0; i < segmentsX; i++) {
+      const a = j * (segmentsX + 1) + i;
+      const b = a + segmentsX + 1;
+      indices.push(a, b, a + 1);
+      indices.push(b, b + 1, a + 1);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(vertices, 3)
+  );
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+const petalGeo = petalGeometry();
+
+// Thin crystal edge line
+function addPetalEdges(mesh, material) {
+  const positions = mesh.geometry.attributes.position;
+  const edge = [];
+
+  for (let j = 0; j <= 18; j++) {
+    const left = j * 13;
+    const right = left + 12;
+
+    edge.push(new THREE.Vector3().fromBufferAttribute(positions, left));
+  }
+
+  for (let j = 18; j >= 0; j--) {
+    const right = j * 13 + 12;
+    edge.push(new THREE.Vector3().fromBufferAttribute(positions, right));
+  }
+
+  const curve = new THREE.CatmullRomCurve3(edge);
+  const tube = new THREE.Mesh(
+    new THREE.TubeGeometry(curve, 60, 0.007, 4, false),
+    material
+  );
+  mesh.add(tube);
+}
+
+// Create a crystal rose
+function createRose(size = 1) {
+  const rose = new THREE.Group();
+
+  const layers = [
+    { count: 5, radius: 0.09, scale: 0.48, tilt: 0.05 },
+    { count: 7, radius: 0.23, scale: 0.69, tilt: 0.32 },
+    { count: 9, radius: 0.40, scale: 0.85, tilt: 0.52 },
+    { count: 11, radius: 0.57, scale: 1.0, tilt: 0.75 }
+  ];
+
+  layers.forEach((layer, layerIndex) => {
+    for (let i = 0; i < layer.count; i++) {
+      const angle =
+        (i / layer.count) * Math.PI * 2 +
+        layerIndex * 0.38;
+
+      const holder = new THREE.Group();
+      holder.rotation.y = angle;
+
+      const petal = new THREE.Mesh(
+        petalGeo,
+        (i + layerIndex) % 3 === 0
+          ? brightCrystal
+          : (i % 4 === 0 ? darkPink : crystal)
+      );
+
+      petal.scale.setScalar(layer.scale);
+      petal.position.z = layer.radius;
+      petal.position.y = -0.1 - layerIndex * 0.07;
+      petal.rotation.x = layer.tilt;
+      petal.rotation.z = (Math.random() - 0.5) * 0.15;
+
+      if (i % 2 === 0) addPetalEdges(petal, glowMaterial);
+
+      holder.add(petal);
+      rose.add(holder);
+    }
+  });
+
+  // Rose crystalline heart
+  const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.24, 1),
+    brightCrystal
+  );
+  core.position.y = 0.28;
+  rose.add(core);
+
+  rose.scale.setScalar(size);
+  return rose;
+}
+
+// Bouquet
+const bouquet = new THREE.Group();
+scene.add(bouquet);
+
+const rosePositions = [
+  [-1.55, 1.75,  0.35, 0.85],
+  [-0.85, 2.55, -0.25, 0.98],
+  [ 0.25, 3.10, -0.65, 1.04],
+  [ 1.25, 2.35,  0.05, 0.94],
+  [ 1.55, 1.35,  0.60, 0.90],
+  [ 0.10, 1.40,  1.10, 1.02],
+  [-1.05, 0.95,  1.20, 0.80]
+];
+
+function makeStem(start, end, radius = 0.022) {
+  const middle = start.clone().lerp(end, 0.5);
+  middle.x += (end.x - start.x) * 0.2;
+  middle.z += Math.sin(end.x * 2) * 0.22;
+
+  const curve = new THREE.CatmullRomCurve3([
+    start, middle, end
+  ]);
+
+  return new THREE.Mesh(
+    new THREE.TubeGeometry(curve, 28, radius, 6, false),
+    stemMaterial
+  );
+}
+
+const leafGeo = new THREE.IcosahedronGeometry(0.36, 0);
+
+function makeLeaf(position, rotation) {
+  const leaf = new THREE.Mesh(leafGeo, brightCrystal);
+  leaf.scale.set(0.56, 1.3, 0.15);
+  leaf.position.copy(position);
+  leaf.rotation.set(...rotation);
+  bouquet.add(leaf);
+}
+
+rosePositions.forEach(([x, y, z, size], index) => {
+  const stemEnd = new THREE.Vector3(x, y - 0.18, z);
+  const stemStart = new THREE.Vector3(
+    x * 0.13, -2.4, z * 0.1
+  );
+
+  bouquet.add(makeStem(stemStart, stemEnd));
+
+  const rose = createRose(size);
+  rose.position.set(x, y, z);
+  rose.rotation.z = -x * 0.12;
+  rose.rotation.x = 0.17 + z * 0.08;
+  rose.rotation.y = index * 1.7;
+  bouquet.add(rose);
+
+  const leafPosition = stemStart.clone().lerp(stemEnd, 0.49);
+  leafPosition.x += index % 2 ? 0.3 : -0.3;
+
+  makeLeaf(leafPosition, [
+    0.2, index * 0.7, index % 2 ? -0.8 : 0.8
+  ]);
+});
+
+// Tiny crystal leaves around lower stems
+for (let i = 0; i < 9; i++) {
+  const t = i / 9;
+  const y = -1.65 + t * 2;
+  const angle = i * 2.4;
+  makeLeaf(
+    new THREE.Vector3(
+      Math.cos(angle) * (0.27 + t * 0.45),
+      y,
+      Math.sin(angle) * 0.35
+    ),
+    [0.35, angle, Math.cos(angle) * 0.9]
+  );
+}
+
+// Rings
+const rings = new THREE.Group();
+scene.add(rings);
+
+function makeRing(radius, tubeRadius, color) {
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    toneMapped: false
+  });
+
+  return new THREE.Mesh(
+    new THREE.TorusGeometry(radius, tubeRadius, 8, 240),
+    material
+  );
+}
+
+// Main horizontal halo
+const mainRing = new THREE.Group();
+mainRing.position.y = -1.20;
+
+const mainHalo = makeRing(4.05, 0.018, 0xffb6d2);
+mainHalo.rotation.x = Math.PI / 2;
+mainRing.add(mainHalo);
+
+// Crystal spikes on main halo
+const spikeGeo = new THREE.ConeGeometry(0.065, 0.27, 4);
+for (let i = 0; i < 18; i++) {
+  const angle = i / 18 * Math.PI * 2;
+  const spike = new THREE.Mesh(spikeGeo, brightCrystal);
+  spike.position.set(
+    Math.cos(angle) * 4.05,
+    0,
+    Math.sin(angle) * 4.05
+  );
+  spike.rotation.z = Math.sin(angle) * 0.5;
+  mainRing.add(spike);
+}
+rings.add(mainRing);
+
+// Inner tilted orbit
+const orbit = new THREE.Group();
+orbit.position.y = -0.55;
+orbit.rotation.set(0.40, 0.1, 0.28);
+
+const orbitRing = makeRing(2.05, 0.014, 0xffc9e2);
+orbitRing.scale.set(1.05, 0.60, 1);
+orbit.add(orbitRing);
+rings.add(orbit);
+
+// Fine secondary orbit
+const orbit2 = new THREE.Group();
+orbit2.position.y = -0.50;
+orbit2.rotation.set(0.7, 0.25, -0.55);
+const orbitRing2 = makeRing(1.9, 0.009, 0xff92ba);
+orbitRing2.scale.set(1, 0.52, 1);
+orbit2.add(orbitRing2);
+rings.add(orbit2);
+
+// Floating falling petals
+const floatingPetals = [];
+for (let i = 0; i < 28; i++) {
+  const mesh = new THREE.Mesh(
+    petalGeo,
+    i % 3 === 0 ? brightCrystal : darkPink
+  );
+
+  const scale = 0.10 + Math.random() * 0.18;
+  mesh.scale.setScalar(scale);
+  mesh.position.set(
+    (Math.random() - 0.5) * 8,
+    Math.random() * 6 - 2,
+    (Math.random() - 0.5) * 5
+  );
+
+  mesh.rotation.set(
+    Math.random() * Math.PI,
+    Math.random() * Math.PI,
+    Math.random() * Math.PI
+  );
+
+  scene.add(mesh);
+
+  floatingPetals.push({
+    mesh,
+    speed: 0.15 + Math.random() * 0.3,
+    phase: Math.random() * Math.PI * 2
+  });
+}
+
+// Floating glowing sparkles
+const sparkCount = 160;
+const sparkPositions = new Float32Array(sparkCount * 3);
+for (let i = 0; i < sparkCount; i++) {
+  sparkPositions[i * 3] = (Math.random() - 0.5) * 11;
+  sparkPositions[i * 3 + 1] = (Math.random() - 0.5) * 9;
+  sparkPositions[i * 3 + 2] = (Math.random() - 0.5) * 7;
+}
+
+const sparkGeo = new THREE.BufferGeometry();
+sparkGeo.setAttribute(
+  "position",
+  new THREE.BufferAttribute(sparkPositions, 3)
+);
+
+const sparks = new THREE.Points(
+  sparkGeo,
+  new THREE.PointsMaterial({
+    color: 0xffb1cc,
+    size: 0.035,
+    transparent: true,
+    opacity: 0.8,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  })
+);
+scene.add(sparks);
+
+// Animation
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = Math.min(clock.getDelta(), 0.05);
+  const time = clock.elapsedTime;
+
+  bouquet.rotation.y = Math.sin(time * 0.19) * 0.13;
+  bouquet.rotation.z = Math.sin(time * 0.55) * 0.018;
+  bouquet.position.y = Math.sin(time * 0.8) * 0.06;
+
+  mainRing.rotation.y += delta * 0.10;
+  orbit.rotation.y += delta * 0.36;
+  orbit2.rotation.y -= delta * 0.26;
+
+  floatingPetals.forEach((p) => {
+    p.mesh.position.y -= p.speed * delta;
+    p.mesh.position.x += Math.sin(time + p.phase) * delta * 0.12;
+    p.mesh.rotation.x += delta * 0.24;
+    p.mesh.rotation.y += delta * 0.35;
+    p.mesh.rotation.z += delta * 0.18;
+
+    if (p.mesh.position.y < -3.8) {
+      p.mesh.position.y = 4.3;
+      p.mesh.position.x = (Math.random() - 0.5) * 7;
+    }
+  });
+
+  sparks.rotation.y += delta * 0.015;
+  sparks.material.opacity = 0.6 + 0.2 * Math.sin(time * 1.2);
+
+  controls.update();
+  composer.render();
+}
+
+animate();
+
+// Resize
+window.addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  bloom.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
